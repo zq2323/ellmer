@@ -36,6 +36,15 @@ on_load(chat_perform_stream <- coro::generator(function(provider, req) {
 
   repeat {
     event <- chat_resp_stream(provider, resp)
+    if ((is.null(event)|identical(event$data, character(0))) && isIncomplete(resp$body)) {
+      fds <- curl::multi_fdset(resp$body)
+      promises::promise(function(resolve, reject) {
+        later::later(function() {
+          later::later_fd(resolve, fds$reads, fds$writes, fds$exceptions, fds$timeout)
+        }, 0)
+      })
+      next
+    }
     data <- stream_parse(provider, event)
     if (is.null(data)) {
       break
@@ -56,7 +65,7 @@ on_load(chat_perform_async_stream <- coro::async_generator(function(provider, re
 
   repeat {
     event <- chat_resp_stream(provider, resp)
-    if (is.null(event) && isIncomplete(resp$body)) {
+    if ((is.null(event)|identical(event$data, character(0))) && isIncomplete(resp$body)) {
       fds <- curl::multi_fdset(resp$body)
       await(promises::promise(function(resolve, reject) {
         later::later_fd(resolve, fds$reads, fds$writes, fds$exceptions, fds$timeout)
